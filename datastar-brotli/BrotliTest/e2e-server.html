@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>datastar-brotli e2e tests</title>
+    <script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.3/bundles/datastar.js"></script>
+</head>
+<body data-signals="{}">
+    <h1>datastar-brotli E2E Test Page</h1>
+
+    <section id="stream-test" data-signals:ready="'Ready'">
+        <h2>Compressed stream</h2>
+        <div id="ready" data-text="$ready">Loading...</div>
+        <button id="stream-trigger" data-on:click="@get('/sse/stream')">Trigger</button>
+        <div id="step">Waiting...</div>
+        <ul id="large"></ul>
+    </section>
+</body>
+</html>

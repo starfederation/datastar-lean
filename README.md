@@ -85,7 +85,10 @@ sseResponseWith [brotli, gzip] req fun sse =>
 
 If the client accepts none of them, the stream is sent uncompressed.
 
-**No codecs ship with this package yet.**
+No codecs ship with this package. Brotli is in [datastar-brotli](datastar-brotli/), a separate
+package in this repository.
+
+Codecs for zstd and zlib are in the pipeline.
 
 A codec is a `Compressor`, see [Datastar/Compression.lean](Datastar/Compression.lean).
 

@@ -1,0 +1,13 @@
+{"version": "1.2.0",
+ "packagesDir": ".lake/packages",
+ "packages":
+ [{"type": "path",
+   "scope": "",
+   "name": "datastar",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "..",
+   "configFile": "lakefile.toml"}],
+ "name": "«datastar-brotli»",
+ "lakeDir": ".lake",
+ "fixedToolchain": false}

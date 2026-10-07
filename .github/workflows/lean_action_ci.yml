@@ -16,6 +16,28 @@ jobs:
       - name: Lint the library
         run: lake lint --builtin-only --linters=.missingDocs Datastar
 
+  # The Brotli codec is a separate package with C sources, built by Lake with the system compiler.
+  brotli:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build the library
+        uses: leanprover/lean-action@v1
+        with:
+          build-args: "Datastar"
+
+      - name: Test datastar-brotli
+        run: lake -d datastar-brotli test
+
+      - name: Lint datastar-brotli
+        run: lake -d datastar-brotli lint --builtin-only --linters=.missingDocs DatastarBrotli
+
+      - name: Test datastar-brotli under sanitizers
+        run: datastar-brotli/scripts/sanitize.sh
+
   e2e:
     runs-on: ubuntu-latest
     needs: build
@@ -28,6 +50,10 @@ jobs:
         uses: leanprover/lean-action@v1
         with:
           build-args: "e2e-server"
+
+      # Built here so that Playwright does not time out waiting for it to compile.
+      - name: Build brotli-e2e-server
+        run: lake -d datastar-brotli build brotli-e2e-server
 
       - uses: actions/setup-node@v4
         with:
