@@ -1,3 +1,5 @@
+// Copy to c_cpp_properties.json (gitignored) and set the toolchain include
+// path to match lean-toolchain; `lean --print-prefix` prints the prefix.
 {
   "version": 4,
   "configurations": [
