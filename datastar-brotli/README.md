@@ -19,11 +19,11 @@ Add both packages to your `lakefile.toml`:
 ```toml
 [[require]]
 name = "datastar"
-git = "https://github.com/carlohamalainen/datastar-lean"
+git = "https://github.com/starfederation/datastar-lean"
 
 [[require]]
 name = "datastar-brotli"
-git = "https://github.com/carlohamalainen/datastar-lean"
+git = "https://github.com/starfederation/datastar-lean"
 subDir = "datastar-brotli"
 ```
 

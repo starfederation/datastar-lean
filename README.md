@@ -46,7 +46,7 @@ Add the package to `lakefile.toml`:
 ```toml
 [[require]]
 name = "datastar"
-git = "https://github.com/carlohamalainen/datastar-lean"
+git = "https://github.com/starfederation/datastar-lean"
 rev = "v0.1.0"
 ```
 
