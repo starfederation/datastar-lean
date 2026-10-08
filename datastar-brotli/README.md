@@ -9,8 +9,8 @@ keeps its history for the life of the connection, so later events that repeat ea
 compress well.
 
 The encoder is Google's [Brotli](https://github.com/google/brotli) 1.2.0, vendored under
-[vendor/brotli](vendor/brotli) and built by Lake. Nothing needs to be installed apart from a C
-compiler.
+[vendor/brotli](vendor/brotli) by [fetch.sh](vendor/brotli/fetch.sh) and built by Lake. Nothing
+needs to be installed apart from a C compiler.
 
 ## Usage
 
