@@ -36,6 +36,7 @@ generated=(
 # ByteArray.empty. Without it, an x86-64 executable gets its own copy of each,
 # which Lean's initialisers never fill in, so they read as null.
 flags=(-g -O1 -fPIC -fno-omit-frame-pointer -DBROTLI_ENCODER_CLEANUP_ON_OOM
+       -DDATASTAR_BROTLI_TESTING
        -I "$prefix/include" -I "$brotli/include")
 sanitize=(-fsanitize=address,undefined -fno-sanitize-recover=undefined)
 

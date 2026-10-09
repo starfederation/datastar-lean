@@ -9,7 +9,7 @@
         "${env:HOME}/.elan/toolchains/leanprover--lean4---v4.34.1/include",
         "${workspaceFolder}/datastar-brotli/vendor/brotli/brotli-1.2.0/c/include"
       ],
-      "defines": ["NDEBUG"],
+      "defines": ["NDEBUG", "DATASTAR_BROTLI_TESTING"],
       "cStandard": "c11"
     }
   ]

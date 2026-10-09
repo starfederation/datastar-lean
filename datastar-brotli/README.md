@@ -114,5 +114,6 @@ Two more checks run separately:
   a browser receives each event of a compressed stream while the stream is still open. It is
   served by [BrotliTest/E2EServer.lean](BrotliTest/E2EServer.lean).
 
-The library exports two functions for these tests, `datastar_brotli_live_allocations` and
-`datastar_brotli_fail_allocation`. They are not part of the Lean API.
+The tests link the bindings compiled with `DATASTAR_BROTLI_TESTING`, which adds the allocation
+counter and fault injection behind `datastar_brotli_live_allocations` and
+`datastar_brotli_fail_allocation`. The library has neither.

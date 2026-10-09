@@ -7,6 +7,9 @@ Most cases are generated from a seed. A failure prints the seed of the case, whi
 with `lake exe brotli_test 1 <seed>`. `lake exe brotli_test <cases>` runs more cases, and
 `--no-soak` skips the soak, which measures memory use and so cannot run under a sanitizer.
 
+The bindings are compiled with `DATASTAR_BROTLI_TESTING` for this executable, which adds the
+allocation counter and fault injection used below.
+
 Checked:
 
 * Flush completeness: after every `compress`, the output so far decodes to exactly the input so

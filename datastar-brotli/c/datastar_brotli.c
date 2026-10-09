@@ -1,7 +1,5 @@
 #include <lean/lean.h>
 #include <pthread.h>
-#include <stdatomic.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,12 +10,21 @@ typedef struct {
     BrotliEncoderState *encoder;
 } compress_state;
 
+#ifdef DATASTAR_BROTLI_TESTING
+
+// Instrumentation for `brotli_test`, which links the bindings built with
+// DATASTAR_BROTLI_TESTING: every allocation is counted, and one can be made to
+// fail. The library is built without it.
+
+#include <stdatomic.h>
+#include <stdbool.h>
+
 // Live allocations made by this file and by the encoders it owns. Returns to zero
 // when every stream has been finalized. The tests check this to detect leaks.
 static atomic_long live_allocations = 0;
 
-// For tests: when positive, the allocation that many calls from now fails. Zero,
-// the default, disables this.
+// When positive, the allocation that many calls from now fails. Zero, the
+// default, disables this.
 static atomic_long fail_countdown = 0;
 
 static bool should_fail_allocation(void) {
@@ -39,6 +46,35 @@ static void counting_free(void *opaque, void *ptr) {
     free(ptr);
 }
 
+// A stream's own state and everything inside its encoder are allocated alike.
+static void *state_alloc(size_t size) { return counting_alloc(NULL, size); }
+static void state_free(void *ptr) { counting_free(NULL, ptr); }
+static const brotli_alloc_func encoder_alloc = counting_alloc;
+static const brotli_free_func encoder_free = counting_free;
+
+// The number of live allocations, see `live_allocations`.
+lean_obj_res datastar_brotli_live_allocations(lean_obj_arg unit) {
+    (void)unit;
+    return lean_io_result_mk_ok(lean_usize_to_nat((size_t)atomic_load(&live_allocations)));
+}
+
+// Make the `n`th allocation from now fail, or none if `n` is zero.
+// Returns the previous setting, which is zero if that failure has happened.
+lean_obj_res datastar_brotli_fail_allocation(size_t n) {
+    long previous = atomic_exchange(&fail_countdown, (long)n);
+    return lean_io_result_mk_ok(lean_usize_to_nat(previous > 0 ? (size_t)previous : 0));
+}
+
+#else
+
+static void *state_alloc(size_t size) { return malloc(size); }
+static void state_free(void *ptr) { free(ptr); }
+// Brotli then allocates with malloc and free.
+static const brotli_alloc_func encoder_alloc = NULL;
+static const brotli_free_func encoder_free = NULL;
+
+#endif
+
 static lean_external_class *compress_class = NULL;
 static pthread_once_t compress_class_once = PTHREAD_ONCE_INIT;
 
@@ -49,7 +85,7 @@ static void compress_finalize(void *ptr) {
     if (state->encoder != NULL)
         BrotliEncoderDestroyInstance(state->encoder);
     
-    counting_free(NULL, state);
+    state_free(state);
 }
 
 static void compress_foreach(void *ptr, b_lean_obj_arg fn) {
@@ -137,15 +173,14 @@ static lean_obj_res compress_run(compress_state *state, const uint8_t *input, si
 lean_obj_res datastar_brotli_new(uint8_t quality, uint8_t window_log, uint8_t mode) {
     pthread_once(&compress_class_once, compress_register_class);
 
-    compress_state *state = should_fail_allocation() ? NULL : calloc(1, sizeof(compress_state));
+    compress_state *state = state_alloc(sizeof *state);
     if (state == NULL) {
         return io_error("brotli", "out of memory");
     }
-    atomic_fetch_add(&live_allocations, 1);
 
-    state->encoder = BrotliEncoderCreateInstance(counting_alloc, counting_free, NULL);
+    state->encoder = BrotliEncoderCreateInstance(encoder_alloc, encoder_free, NULL);
     if (state->encoder == NULL) {
-        counting_free(NULL, state);
+        state_free(state);
         return io_error("brotli", "out of memory");
     }
 
@@ -178,17 +213,4 @@ lean_obj_res datastar_brotli_finish(b_lean_obj_arg state_obj) {
     BrotliEncoderDestroyInstance(state->encoder); 
     state->encoder = NULL;
     return result;
-}
-
-// For tests: the number of live allocations, see `live_allocations`.
-lean_obj_res datastar_brotli_live_allocations(lean_obj_arg unit) {
-    (void)unit;
-    return lean_io_result_mk_ok(lean_usize_to_nat((size_t)atomic_load(&live_allocations)));
-}
-
-// For tests: make the `n`th allocation from now fail, or none if `n` is zero.
-// Returns the previous setting, which is zero if that failure has happened.
-lean_obj_res datastar_brotli_fail_allocation(size_t n) {
-    long previous = atomic_exchange(&fail_countdown, (long)n);
-    return lean_io_result_mk_ok(lean_usize_to_nat(previous > 0 ? (size_t)previous : 0));
 }
