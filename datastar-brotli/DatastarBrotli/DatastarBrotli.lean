@@ -69,7 +69,7 @@ A Brotli compressor for `sseResponseWith`.
 The `Encoder` of a started stream is not thread-safe: its calls must be serialised, as
 `sseResponseWith` does. See the module documentation.
 -/
-def brotli (quality : Nat := 5) (windowLog : Nat := 24) (mode : BrotliMode := .text)
+def brotli (quality : Nat := 6) (windowLog : Nat := 22) (mode : BrotliMode := .text)
     (hq : quality ≤ 11 := by decide) (hw : 10 ≤ windowLog ∧ windowLog ≤ 24 := by decide) :
     Compressor where
   encoding := "br"

@@ -46,13 +46,13 @@ otherwise. Browsers only offer `br` over HTTPS and to `localhost`.
 ## Options
 
 ```lean
-brotli (quality := 5) (windowLog := 24) (mode := .text)
+brotli (quality := 6) (windowLog := 22) (mode := .text)
 ```
 
 | Option | Range | Default | Meaning |
 |---|---|---|---|
-| `quality` | 0 to 11 | 5 | 0 is fastest, 11 gives the smallest output. 10 and 11 are far slower and meant for static files. |
-| `windowLog` | 10 to 24 | 24 | Base-2 logarithm of the window size. A larger window finds more repetition across events, and uses more memory for each open stream. |
+| `quality` | 0 to 11 | 6 | 0 is fastest, 11 gives the smallest output. 10 and 11 are far slower and meant for static files. |
+| `windowLog` | 10 to 24 | 22 | Base-2 logarithm of the window size. A larger window finds more repetition across events, and uses more memory for each open stream. |
 | `mode` | `.generic`, `.text`, `.font` | `.text` | A hint about the kind of input. |
 
 Both ranges are checked when the code is compiled. A value known only at 
