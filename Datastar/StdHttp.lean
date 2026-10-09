@@ -110,8 +110,23 @@ private def sseResponseCore
     let sse : ServerSentEventGenerator := {stream, lock, encoder, finished}
     try
       ContextAsync.runIn ctx (callback sse)
-    finally
+    catch e =>
+      -- The callback threw, or the client disconnected. We should try to finish the
+      -- sse stream, as this will clean up resources like the encoder.
+      -- This call to `sse.finish` might also fail, but we drop the error here as we
+      -- are about to throw `e`.
       try sse.finish catch _ => pure ()
+      throw e
+
+    -- The callback completed, so finish the SSE stream, which calls `encoder.finish` for
+    -- a compressed stream.
+    --
+    -- We deliberately do not wrap this `sse.finish` in a try/catch. If we did so, an
+    -- error from `encoder.finish` would be squashed, and this (body) producer would
+    -- return normally. The client would receive a complete response whose compressed
+    -- stream is missing its final bytes. Instead, the error is propagated so it
+    -- reaches `Handler.onFailure` and the connection is closed as incomplete.
+    sse.finish
 
 /--
 A response that streams SSE events. The connection stays open until `callback` returns.

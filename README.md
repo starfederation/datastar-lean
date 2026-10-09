@@ -107,6 +107,14 @@ Then open <http://127.0.0.1:3000>. Each example takes the port as an optional ar
 | `hello-world-channel` | State shared between connections; Start restarts the animation on every open page. |
 | `activity-feed` | `patchSignals` with `patchElements`; `@post` requests with signals in the body. |
 
+## Tests
+
+```
+lake test
+```
+
+checks the `#guard`s in `Test/Unit.lean` and runs `Test/StdHttp.lean`.
+
 ## SDK tests
 
 The official [Datastar SDK test suite](https://github.com/starfederation/datastar/tree/main/sdk/tests)
