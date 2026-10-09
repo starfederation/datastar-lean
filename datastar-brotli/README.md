@@ -62,16 +62,12 @@ run time needs its proof passed in, for example:
 if h : quality ≤ 11 then brotli quality (hq := h) else brotli
 ```
 
-## Calls must be serialised
+## Sharing a stream
 
-A stream is not thread-safe. `compress` and `finish` on one stream must never run at the same
-time as each other, or as a second `compress`. `finish` frees the encoder, so a `compress` that
-is still running on another thread would use freed memory.
-
-`sseResponseWith` takes a lock around every call, so a `ServerSentEventGenerator` is safe to
-share between tasks, and nothing more is needed in normal use. This only matters to code that
-calls the compressor's `start` itself and uses the resulting `Encoder` from more than one task:
-that code must serialise its calls.
+A stream takes a lock around each call, so `compress` and `finish` may be called from any task:
+`finish` cannot free the encoder under a running `compress`. The calls still form one sequence,
+and the output of each must be sent before the next call is made. `sseResponseWith` does this
+under its own lock, so a `ServerSentEventGenerator` is safe to share between tasks.
 
 After `finish`, `compress` fails with an error and a second `finish` returns nothing.
 
@@ -105,6 +101,8 @@ runs [BrotliTest/Properties.lean](BrotliTest/Properties.lean), which takes a few
 - **No leaks.** The C side counts its live allocations, which must be zero after every case.
 - **Allocation failures.** Each allocation of a stream is made to fail in turn. Every failure
   must be reported as an error, with nothing leaked.
+- **Concurrent misuse.** Several tasks compress on one stream while another finishes it. Every
+  call returns, and nothing is used after it is freed, which the sanitizer run checks.
 - **Soak.** Memory use must stay level over many calls, which catches leaked Lean objects that
   the allocation count cannot see.
 

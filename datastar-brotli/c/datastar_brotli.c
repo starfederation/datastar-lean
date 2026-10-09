@@ -7,6 +7,7 @@
 #include <brotli/encode.h>
 
 typedef struct {
+    pthread_mutex_t lock; // held by compress and finish, which frees the encoder
     BrotliEncoderState *encoder;
 } compress_state;
 
@@ -84,7 +85,9 @@ static void compress_finalize(void *ptr) {
     
     if (state->encoder != NULL)
         BrotliEncoderDestroyInstance(state->encoder);
-    
+
+    // No reference is left, so no call holds the lock.
+    pthread_mutex_destroy(&state->lock);
     state_free(state);
 }
 
@@ -178,8 +181,14 @@ lean_obj_res datastar_brotli_new(uint8_t quality, uint8_t window_log, uint8_t mo
         return io_error("brotli", "out of memory");
     }
 
+    if (pthread_mutex_init(&state->lock, NULL) != 0) {
+        state_free(state);
+        return io_error("brotli", "cannot create a lock");
+    }
+
     state->encoder = BrotliEncoderCreateInstance(encoder_alloc, encoder_free, NULL);
     if (state->encoder == NULL) {
+        pthread_mutex_destroy(&state->lock);
         state_free(state);
         return io_error("brotli", "out of memory");
     }
@@ -195,22 +204,29 @@ lean_obj_res datastar_brotli_new(uint8_t quality, uint8_t window_log, uint8_t mo
 
 lean_obj_res datastar_brotli_compress(b_lean_obj_arg state_obj, b_lean_obj_arg chunk) {
     compress_state *state = lean_get_external_data(state_obj);
+    pthread_mutex_lock(&state->lock);
 
-    if (state->encoder == NULL)
-        return io_error("brotli compress", "the stream has ended");
+    lean_obj_res result = state->encoder == NULL
+        ? io_error("brotli compress", "the stream has ended")
+        : compress_run(state, lean_sarray_cptr(chunk), lean_sarray_size(chunk), BROTLI_OPERATION_FLUSH);
 
-    return compress_run(state, lean_sarray_cptr(chunk), lean_sarray_size(chunk), BROTLI_OPERATION_FLUSH);
+    pthread_mutex_unlock(&state->lock);
+    return result;
 }
 
 lean_obj_res datastar_brotli_finish(b_lean_obj_arg state_obj) {
     compress_state *state = lean_get_external_data(state_obj);
+    pthread_mutex_lock(&state->lock);
 
-    if (state->encoder == NULL)
-        return lean_io_result_mk_ok(lean_alloc_sarray(1, 0, 0));
+    lean_obj_res result;
+    if (state->encoder == NULL) {
+        result = lean_io_result_mk_ok(lean_alloc_sarray(1, 0, 0));
+    } else {
+        result = compress_run(state, NULL, 0, BROTLI_OPERATION_FINISH);
+        BrotliEncoderDestroyInstance(state->encoder);
+        state->encoder = NULL;
+    }
 
-    lean_obj_res result = compress_run(state, NULL, 0, BROTLI_OPERATION_FINISH);
-
-    BrotliEncoderDestroyInstance(state->encoder); 
-    state->encoder = NULL;
+    pthread_mutex_unlock(&state->lock);
     return result;
 }

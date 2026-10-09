@@ -19,6 +19,7 @@ Checked:
 * No leaks: once a stream is dropped, the C side has no live allocations.
 * Allocation failures: failing each allocation of a stream in turn gives an error every time,
   and never a crash or a leak.
+* Concurrent misuse: `compress` and `finish` from several tasks at once is safe.
 * Soak: memory use is stable over many calls, which catches leaked Lean objects.
 * Parameters: a `quality` or `windowLog` out of range is a compile error.
 -/
@@ -282,6 +283,31 @@ private def allocationFailureCases : IO Nat := do
     injected := injected + (← allocationFailures p chunks)
   return injected
 
+/-! ## Concurrent misuse -/
+
+/--
+Four tasks call `compress` on one stream while a fifth calls `finish`, which lands at a different
+moment each round. The lock in the stream makes this safe: every call returns a result or "ended",
+and the sanitizer run sees no use after free. Returns the number of rounds.
+-/
+private def concurrentCase : IO Nat := do
+  let (text, _) ← (genText 4096).run 3
+  let rounds := 20
+  for round in [0:rounds] do
+    let encoder ← (brotli (quality := 1) (windowLog := 16)).start
+    let compressors ← (List.range 4).mapM fun _ => IO.asTask (prio := .dedicated) do
+      for _ in [0:200] do
+        try discard <| encoder.compress text
+        catch e => check (((toString e).splitOn "ended").length > 1) s!"round {round}: {e}"
+    let finisher ← IO.asTask (prio := .dedicated) do
+      IO.sleep (round % 3).toUInt32
+      discard encoder.finish
+    for task in finisher :: compressors do
+      match ← IO.wait task with
+      | .error e => throw e
+      | .ok () => pure ()
+  return rounds
+
 /-! ## Soak -/
 
 /-- Resident memory of this process, in kilobytes. -/
@@ -373,6 +399,10 @@ def main (args : List String) : IO UInt32 := do
 
   unless ← runGroup "allocation failures"
       (do pure s!"{← allocationFailureCases} injected, all reported as errors") do
+    failures := failures + 1
+
+  unless ← runGroup "concurrent misuse"
+      (do pure s!"{← concurrentCase} rounds, every call returned") do
     failures := failures + 1
 
   if withSoak then

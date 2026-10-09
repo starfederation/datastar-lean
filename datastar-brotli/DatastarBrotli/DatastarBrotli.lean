@@ -4,13 +4,8 @@ import Datastar.Compression
 Brotli compression of SSE streams: the `brotli` compressor, for `sseResponseWith`.
 
 The encoder is the vendored Brotli C library, reached through the bindings in
-`c/datastar_brotli.c`.
-
-## Calls must be serialised
-
-A stream is not thread-safe: no two calls on it may run at the same time. Two `compress` calls
-would corrupt the encoder's state, and `finish` frees the encoder that a concurrent `compress`
-would still be using.
+`c/datastar_brotli.c`. A stream takes a lock around each call, so an `Encoder` may be shared
+between tasks: `finish` cannot free the encoder under a running `compress`.
 -/
 
 namespace Datastar
@@ -19,7 +14,7 @@ private opaque BrotliStreamPointed : NonemptyType
 
 /--
 A Brotli encoder for one stream, owned by the C side and freed when the last reference is
-dropped. Not thread-safe: see the module documentation.
+dropped. Its calls are serialised by a lock on the C side.
 -/
 private def BrotliStream : Type := BrotliStreamPointed.type
 
@@ -31,14 +26,13 @@ private opaque BrotliStream.new (quality : UInt8) (windowLog :UInt8) (mode : UIn
 
 /--
 Compress `chunk` and flush, so that the output so far decodes to all of the input so far. Fails
-once the stream is finished. Must not run concurrently with any other call on `stream`.
+once the stream is finished.
 -/
 @[extern "datastar_brotli_compress"]
 private opaque BrotliStream.compress (stream : @& BrotliStream) (chunk : @& ByteArray) : IO ByteArray
 
 /--
 End the stream and free the encoder, returning the trailing bytes. Later calls return nothing.
-Must not run concurrently with any other call on `stream`.
 -/
 @[extern "datastar_brotli_finish"]
 private opaque BrotliStream.finish (stream : @& BrotliStream) : IO ByteArray
@@ -66,8 +60,9 @@ A Brotli compressor for `sseResponseWith`.
   repetition across events and uses more memory for each open stream.
 * `mode`: a hint about the kind of input.
 
-The `Encoder` of a started stream is not thread-safe: its calls must be serialised, as
-`sseResponseWith` does. See the module documentation.
+A started stream serialises its own calls, so its `Encoder` may be shared between tasks. The
+output of each call must still be sent before the next call is made, as `sseResponseWith`
+arranges under its own lock.
 -/
 def brotli (quality : Nat := 6) (windowLog : Nat := 22) (mode : BrotliMode := .text)
     (hq : quality ≤ 11 := by decide) (hw : 10 ≤ windowLog ∧ windowLog ≤ 24 := by decide) :
