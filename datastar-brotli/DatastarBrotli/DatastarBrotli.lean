@@ -66,21 +66,18 @@ A Brotli compressor for `sseResponseWith`.
   repetition across events and uses more memory for each open stream.
 * `mode`: a hint about the kind of input.
 
-Starting a stream fails if `quality` or `windowLog` is out of range.
-
 The `Encoder` of a started stream is not thread-safe: its calls must be serialised, as
 `sseResponseWith` does. See the module documentation.
 -/
-def brotli (quality : Nat := 5) (windowLog : Nat := 24) (mode : BrotliMode := .text) : Compressor where
+def brotli (quality : Nat := 5) (windowLog : Nat := 24) (mode : BrotliMode := .text)
+    (hq : quality ≤ 11 := by decide) (hw : 10 ≤ windowLog ∧ windowLog ≤ 24 := by decide) :
+    Compressor where
   encoding := "br"
   start := do
-    if quality > 11 then
-      throw <| IO.userError s!"brotli: quality {quality} is outside 0 to 11"
-
-    if windowLog < 10 || windowLog > 24 then
-      throw <| IO.userError s!"brotli: windowLog {windowLog} is outside 10 to 24"
-
-    let stream ← BrotliStream.new quality.toUInt8 windowLog.toUInt8 mode.toUInt8
+    -- The bounds make the narrowing exact.
+    let quality := UInt8.ofNatLT quality (Nat.lt_of_le_of_lt hq (by decide))
+    let windowLog := UInt8.ofNatLT windowLog (Nat.lt_of_le_of_lt hw.2 (by decide))
+    let stream ← BrotliStream.new quality windowLog mode.toUInt8
     pure { compress := stream.compress, finish := stream.finish }
 
 end Datastar

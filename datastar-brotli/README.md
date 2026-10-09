@@ -55,7 +55,12 @@ brotli (quality := 5) (windowLog := 24) (mode := .text)
 | `windowLog` | 10 to 24 | 24 | Base-2 logarithm of the window size. A larger window finds more repetition across events, and uses more memory for each open stream. |
 | `mode` | `.generic`, `.text`, `.font` | `.text` | A hint about the kind of input. |
 
-Starting a stream fails with an `IO` error if `quality` or `windowLog` is out of range.
+Both ranges are checked when the code is compiled. A value known only at 
+run time needs its proof passed in, for example:
+
+```lean
+if h : quality ≤ 11 then brotli quality (hq := h) else brotli
+```
 
 ## Calls must be serialised
 
@@ -65,8 +70,8 @@ is still running on another thread would use freed memory.
 
 `sseResponseWith` takes a lock around every call, so a `ServerSentEventGenerator` is safe to
 share between tasks, and nothing more is needed in normal use. This only matters to code that
-calls `brotli.start` itself and uses the resulting `Encoder` from more than one task: that code
-must serialise its calls.
+calls the compressor's `start` itself and uses the resulting `Encoder` from more than one task:
+that code must serialise its calls.
 
 After `finish`, `compress` fails with an error and a second `finish` returns nothing.
 

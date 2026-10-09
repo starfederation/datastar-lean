@@ -20,6 +20,7 @@ Checked:
 * Allocation failures: failing each allocation of a stream in turn gives an error every time,
   and never a crash or a leak.
 * Soak: memory use is stable over many calls, which catches leaked Lean objects.
+* Parameters: a `quality` or `windowLog` out of range is a compile error.
 -/
 
 open Datastar
@@ -125,8 +126,14 @@ private def genBytes (size : Nat) : Gen ByteArray := do
   | _ => bytes ← genText size
   return bytes
 
+/-- `Params` come from a generator, so the range proofs are made here, as code with values from a
+configuration file would. -/
 private def start (p : Params) : IO Encoder :=
-  (brotli p.quality p.windowLog p.mode).start
+  if hq : p.quality ≤ 11 then
+    if hw : 10 ≤ p.windowLog ∧ p.windowLog ≤ 24 then
+      (brotli p.quality p.windowLog p.mode hq hw).start
+    else throw <| IO.userError s!"{p}: windowLog is out of range"
+  else throw <| IO.userError s!"{p}: quality is out of range"
 
 /-- The slowest qualities get small inputs, to keep the run short. -/
 private def genChunk (p : Params) : Gen ByteArray := do
@@ -180,17 +187,43 @@ private def modelCase : Gen Unit := do
     check (same decoded sent) s!"{p}: step {step}: decoded {decoded.size} of {sent.size} bytes"
     check (finished == ended) s!"{p}: step {step}: stream ended is {finished}, expected {ended}"
 
+/-! ## Parameters out of range are compile errors -/
+
+/--
+error: could not synthesize default value for parameter 'hq' using tactics
+---
+error: Tactic `decide` proved that the proposition
+  12 ≤ 11
+is false
+-/
+#guard_msgs in
+example : Compressor := brotli (quality := 12)
+
+/--
+error: could not synthesize default value for parameter 'hw' using tactics
+---
+error: Tactic `decide` proved that the proposition
+  10 ≤ 9 ∧ 9 ≤ 24
+is false
+-/
+#guard_msgs in
+example : Compressor := brotli (windowLog := 9)
+
+/--
+error: could not synthesize default value for parameter 'hw' using tactics
+---
+error: Tactic `decide` proved that the proposition
+  10 ≤ 25 ∧ 25 ≤ 24
+is false
+-/
+#guard_msgs in
+example : Compressor := brotli (windowLog := 25)
+
 /-! ## Fixed cases -/
 
 private def fixedCases : IO Unit := do
-  -- Invalid parameters are rejected before anything is allocated.
-  expectError "quality 12" "quality" (brotli (quality := 12)).start
-  expectError "windowLog 9" "windowLog" (brotli (windowLog := 9)).start
-  expectError "windowLog 25" "windowLog" (brotli (windowLog := 25)).start
-  check ((← liveAllocations ()) == 0) "rejected parameters left allocations behind"
-
   -- An open stream holds allocations: the leak check can see them.
-  let encoder ← brotli.start
+  let encoder ← (brotli).start
   check ((← liveAllocations ()) > 0) "an open stream has no live allocations"
 
   -- A stream with no events is still a valid, empty stream.
