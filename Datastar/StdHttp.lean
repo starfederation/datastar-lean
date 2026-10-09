@@ -82,6 +82,8 @@ private def cacheControl : Header.Name := .mk "cache-control"
 
 private def acceptEncoding : Header.Name := .mk "accept-encoding"
 
+private def vary : Header.Name := .mk "vary"
+
 private def clientEncodings (req : Request β) : List String :=
   match req.line.headers.get? acceptEncoding with
   | some header => parseEncodings header.value
@@ -89,6 +91,7 @@ private def clientEncodings (req : Request β) : List String :=
 
 private def sseResponseCore
     (chosen : Option Compressor)
+    (negotiated : Bool)
     (callback : ServerSentEventGenerator → ContextAsync Unit) :
     ContextAsync (Response Body.Any) := do
   let ctx ← ContextAsync.getContext
@@ -97,6 +100,9 @@ private def sseResponseCore
   let builder := Response.ok
         |>.header cacheControl (.mk "no-cache")
         |>.header Header.Name.contentType (.mk "text/event-stream")
+  -- A response chosen by `Accept-Encoding` must not be served from a cache to a client that
+  -- sent a different one (RFC 9110 §12.5.5).
+  let builder := if negotiated then builder.header vary (.mk "Accept-Encoding") else builder
 
   let (builder, encoder) ← match chosen with
     | none => pure (builder, none)
@@ -132,11 +138,12 @@ private def sseResponseCore
 A response that streams SSE events. The connection stays open until `callback` returns.
 -/
 def sseResponse (callback : ServerSentEventGenerator → ContextAsync Unit) : ContextAsync (Response Body.Any) :=
-  sseResponseCore none callback
+  sseResponseCore none false callback
 
 /--
 `sseResponse`, compressed with the first of `compressors` that the client accepts; uncompressed
-if there is none.
+if there is none. The response carries `Vary: Accept-Encoding` whenever the choice depended on
+the request, so with every strategy but `.forced`.
 -/
 def sseResponseWith
     (compressors : List Compressor)
@@ -144,7 +151,8 @@ def sseResponseWith
     (callback : ServerSentEventGenerator → ContextAsync Unit)
     (strategy : CompressionStrategy := .serverPriority) :
     ContextAsync (Response Body.Any) :=
-  sseResponseCore (negotiate compressors (clientEncodings req) strategy) callback
+  sseResponseCore (negotiate compressors (clientEncodings req) strategy)
+    (negotiated := !compressors.isEmpty && strategy != .forced) callback
 
 private def decodeJson [FromJson α] (raw : String) : Except String α := do
   let j ← Lean.Json.parse raw
