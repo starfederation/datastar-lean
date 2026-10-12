@@ -1,4 +1,8 @@
-import Datastar.Compression
+module
+
+public import Datastar.Compression
+
+public section
 
 /-!
 Brotli compression of SSE streams: the `brotli` compressor, for `sseResponseWith`.

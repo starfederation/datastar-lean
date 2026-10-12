@@ -1,3 +1,5 @@
+module
+
 -- This module serves as the root of the `DatastarBrotli` library.
 -- Import modules here that should be built as part of the library.
-import DatastarBrotli.DatastarBrotli
+public import DatastarBrotli.DatastarBrotli
