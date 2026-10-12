@@ -3,7 +3,7 @@ open System Lake DSL
 
 package "datastar-brotli" where
   description := "Brotli compression of Datastar SSE streams."
-  version := v!"0.1.0"
+  version := v!"1.0.0"
   homepage := "https://github.com/starfederation/datastar-lean"
   keywords := #["datastar", "compression", "brotli"]
   license := "MIT"

@@ -6,7 +6,7 @@
 
 ## License
 
-This package is licensed for free under the [MIT License](LICENSE).
+This package is licensed for free under the [MIT License](LICENSE.md).
 
 ## Design
 
@@ -53,7 +53,7 @@ Add the package to `lakefile.toml`:
 [[require]]
 name = "datastar"
 git = "https://github.com/starfederation/datastar-lean"
-rev = "v0.1.0"
+rev = "v1.0.0"
 ```
 
 Tested with Lean 4.34.1, see [lean-toolchain](lean-toolchain).
@@ -85,7 +85,7 @@ def main : IO Unit := Async.block do
 the compressors in preference order:
 
 ```lean
-sseResponseWith [brotli, gzip] req fun sse =>
+sseResponseWith [brotli] req fun sse =>
   sse.send <| patchElements "<div id=\"message\">Hello!</div>"
 ```
 
