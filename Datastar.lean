@@ -33,6 +33,7 @@ def main : IO Unit := Async.block do
 * `Datastar.LeanJson` — signals decoded with `Lean.Data.Json`; leave it out, by importing
   `Datastar.Core`, to avoid linking the Lean frontend
 * `Datastar.Compression` — the codec interface and `Content-Encoding` negotiation
+* `Datastar.Generator` — SSE streaming over any transport
 * `Datastar.SSE` — the wire format
 * `Datastar.Types` — protocol types and defaults
 -/

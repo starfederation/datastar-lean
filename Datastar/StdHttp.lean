@@ -4,6 +4,7 @@ public import Std.Http
 public import Datastar.Types
 public import Datastar.SSE
 public import Datastar.Compression
+public import Datastar.Generator
 
 public section
 
@@ -26,53 +27,25 @@ Obtain one from the callback passed to `sseResponse`.
 
 The handle is safe to share between tasks.
 -/
-structure ServerSentEventGenerator where
-  private mk ::
-  private stream : Body.Stream
-  private lock : Std.Semaphore
-  private encoder : Option Encoder
-  private finished : IO.Ref Bool
-
-namespace ServerSentEventGenerator
-
-private def withLock (sse : ServerSentEventGenerator) (action : Async α) : Async α := do
-  let p ← sse.lock.acquire
-  let res : Option Unit ← await p.result?
-
-  match res with
-    | none => throw (IO.userError "SSE generator lock was dropped")
-    | some _ => try action finally sse.lock.release
-
-private def encode (sse : ServerSentEventGenerator) (bytes : ByteArray) : IO ByteArray := do
-  let some encoder := sse.encoder | return bytes
-  if ← sse.finished.get then
-    throw (IO.userError "SSE stream has ended")
-  encoder.compress bytes
-
-private def finish (sse : ServerSentEventGenerator) : Async Unit := do
-  let some encoder := sse.encoder | return
-  sse.withLock do
-    sse.finished.set true
-    sse.stream.send { data := ← encoder.finish }
+abbrev ServerSentEventGenerator := Generator Async
 
 /--
 Send a `PatchElements`, `PatchSignals` or `ExecuteScript` event.
 
 Throws once the client has gone away.
 -/
-def send [ToEvent α] (sse : ServerSentEventGenerator) (x : α) : Async Unit := do
-  let event := toEvent x
-  let text := renderEvent event
-  sse.withLock do
-    sse.stream.send { data := ← sse.encode text.toUTF8 }
+def ServerSentEventGenerator.send [ToEvent α] (sse : ServerSentEventGenerator) (x : α) : Async Unit :=
+  Generator.send sse x
 
-end ServerSentEventGenerator
+private def withLock (lock : Std.Semaphore) (action : Async Unit) : Async Unit := do
+  let p ← lock.acquire
+  let res : Option Unit ← await p.result?
 
-private def cacheControl : Header.Name := .mk "cache-control"
+  match res with
+    | none => throw (IO.userError "SSE generator lock was dropped")
+    | some _ => try action finally lock.release
 
 private def acceptEncoding : Header.Name := .mk "accept-encoding"
-
-private def vary : Header.Name := .mk "vary"
 
 private def clientEncodings (req : Request β) : List String :=
   match req.line.headers.get? acceptEncoding with
@@ -86,24 +59,18 @@ private def sseResponseCore
     ContextAsync (Response Body.Any) := do
   let ctx ← ContextAsync.getContext
   let lock ← Semaphore.new 1
-  let finished ← IO.mkRef false
-  let builder := Response.ok
-        |>.header cacheControl (.mk "no-cache")
-        |>.header Header.Name.contentType (.mk "text/event-stream")
-  -- A response chosen by `Accept-Encoding` must not be served from a cache to a client that
-  -- sent a different one (RFC 9110 §12.5.5).
-  let builder := if negotiated then builder.header vary (.mk "Accept-Encoding") else builder
+  let mut builder := Response.ok
+  for (name, value) in sseHeaders (chosen.map (·.encoding)) negotiated do
+    let some name' := Header.Name.ofString? name
+      | throw (IO.userError s!"invalid header name: {name.quote}")
+    let some value' := Header.Value.ofString? value
+      | throw (IO.userError s!"invalid {name}: {value.quote}")
+    builder := builder.header name' value'
 
-  let (builder, encoder) ← match chosen with
-    | none => pure (builder, none)
-    | some compressor =>
-      let some encoding := Header.Value.ofString? compressor.encoding
-        | throw (IO.userError s!"invalid Content-Encoding: {compressor.encoding.quote}")
-      let encoder ← compressor.start
-      pure (builder.header Header.Name.contentEncoding encoding, some encoder)
+  let encoder ← chosen.mapM (·.start)
 
   builder.stream fun stream => do
-    let sse : ServerSentEventGenerator := {stream, lock, encoder, finished}
+    let sse ← Generator.new (fun data => stream.send { data }) (withLock lock) encoder
     try
       ContextAsync.runIn ctx (callback sse)
     catch e =>
