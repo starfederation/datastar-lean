@@ -34,10 +34,10 @@ name = "sdk-test-server"
 root = "Test.SdkTestServer"
 
 # `lake test`: the `#guard` checks in Test/Unit.lean run when it compiles, and Test/Main.lean
-# runs the tests in Test/StdHttp.lean.
+# runs the tests in Test/StdHttp.lean and Test/Generator.lean.
 [[lean_lib]]
 name = "Test"
-roots = ["Test.Unit", "Test.StdHttp"]
+roots = ["Test.Unit", "Test.StdHttp", "Test.Generator"]
 
 [[lean_exe]]
 name = "datastar_test"

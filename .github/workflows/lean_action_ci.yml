@@ -16,6 +16,28 @@ jobs:
       - name: Lint the library
         run: lake lint --builtin-only --linters=.missingDocs Datastar
 
+  # LeanIn needs a newer Lean than this package, and libuv.
+  examples-leanin:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install libuv
+        run: sudo apt-get update && sudo apt-get install -y libuv1-dev
+
+      - name: Build the example
+        uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: examples-leanin
+          build-args: "fan-out"
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Smoke test the example
+        run: examples-leanin/smoke.py
+
   # The Brotli codec is a separate package with C sources, built by Lake with the system compiler.
   brotli:
     runs-on: ubuntu-latest
