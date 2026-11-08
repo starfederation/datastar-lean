@@ -1,5 +1,5 @@
 name = "datastar-leanin"
-version = "1.0.0"
+version = "1.1.0"
 description = "Datastar SSE streams on the LeanIn concurrency runtime."
 homepage = "https://github.com/starfederation/datastar-lean"
 keywords = ["datastar", "sse", "leanin"]

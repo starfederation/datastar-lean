@@ -20,12 +20,12 @@ Add both packages to your `lakefile.toml`, at the same `rev`:
 [[require]]
 name = "datastar"
 git = "https://github.com/starfederation/datastar-lean"
-rev = "v1.0.0"
+rev = "v1.1.0"
 
 [[require]]
 name = "datastar-brotli"
 git = "https://github.com/starfederation/datastar-lean"
-rev = "v1.0.0"
+rev = "v1.1.0"
 subDir = "datastar-brotli"
 ```
 

@@ -57,7 +57,7 @@ Add the package to `lakefile.toml`:
 [[require]]
 name = "datastar"
 git = "https://github.com/starfederation/datastar-lean"
-rev = "v1.0.0"
+rev = "v1.1.0"
 ```
 
 Tested with Lean 4.34.1, see [lean-toolchain](lean-toolchain).

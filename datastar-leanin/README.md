@@ -22,12 +22,12 @@ and link libuv:
 [[require]]
 name = "datastar"
 git = "https://github.com/starfederation/datastar-lean"
-rev = "v1.0.0"
+rev = "v1.1.0"
 
 [[require]]
 name = "datastar-leanin"
 git = "https://github.com/starfederation/datastar-lean"
-rev = "v1.0.0"
+rev = "v1.1.0"
 subDir = "datastar-leanin"
 
 [[lean_exe]]
