@@ -20,31 +20,21 @@ structure Report where
   latency : Nat
   finished : Bool
 
-def nextReport (ctx : Task.Ctx) (reports : Channel Report) : VM Report :=
+/-- Run a `Task.Async` from `VM`, resuming on the shared route. -/
+def awaitAsync (ctx : Task.Ctx) (a : Task.Async α) : VM α :=
   let shared := { ctx with resume := ctx.resumeShared }
-  VM.ioE fun resume _ => (Task.Sync.Channel.recv reports).step (fun report _ => resume report) shared
+  VM.ioE fun resume _ => a.step (fun v _ => resume v) shared
+
+def nextReport (ctx : Task.Ctx) (reports : Channel Report) : VM Report :=
+  awaitAsync ctx (Task.Sync.Channel.recv reports)
 
 abbrev Push := Task.Item → BaseIO Unit
 
-/-- Sleep for `ms`, then return `finished`. -/
-def after (clock : Clock) (ms : Nat) (finished : Bool) : VM Bool := do
-  VM.sleep clock (.ofNat ms)
-  return finished
-
-/--
-Race the work against the deadline and report the winner. The loser is not cancelled: its timer
-fires and nobody reads its cell.
-
-`RawCell` is an unlocked `IO.Ref`, safe only because `main` runs exactly one carrier.
--/
-def job (reports : Channel Report) (push : Push) (clock : Clock)
+/-- Race the work against the deadline and report the winner. -/
+def job (ctx : Task.Ctx) (reports : Channel Report) (push : Push) (clock : Clock)
     (index latency deadline : Nat) : VM Unit := do
-  let finished ← VM.ioE fun resume _ => do
-    let work ← RawCell.new
-    let timer ← RawCell.new
-    VM.runToCell (after clock latency true) work
-    VM.runToCell (after clock deadline false) timer
-    selectRaw work timer fun (_, finished) => resume finished
+  let work := Runtime.sleep clock (.ofNat latency)
+  let finished := (← awaitAsync ctx (Runtime.withTimeout clock (.ofNat deadline) work)).isSome
   let sent ← (Channel.trySend reports { index, latency, finished } push : IO Bool)
   unless sent do throw (.userError "the report channel is full")
 
@@ -96,7 +86,7 @@ def run (push : Push) (clock : Clock) (ctx : Task.Ctx) (signals : Signals) (sse 
   for index in [0:signals.jobs] do
     let latency ← (monadLift (IO.rand 100 1500 : IO Nat) : VM Nat)
     work := work + latency
-    monadLift (VM.run (job reports push clock index latency signals.deadline))
+    monadLift (VM.run (job ctx reports push clock index latency signals.deadline))
   log "spawned jobs"
 
   let mut finished := 0
@@ -149,7 +139,7 @@ def main (args : List String) : IO UInt32 := do
   let hooks ← Hooks.new
   let listener ← Listener.bind (loopback port.toUInt16)
   -- Exactly one carrier: `Runtime.run` serves the one queue on this thread and drives the libuv loop
-  -- itself, so every step, timer and socket callback runs here. That is what makes `RawCell` safe.
+  -- itself, so every step, timer and socket callback runs here.
   let executor ← Sched.Executor.new Task.Item 256 1
   let clock := Clock.live hooks
   let config : Server.Config := { clock, continuePolicy := .application }
