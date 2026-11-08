@@ -1,0 +1,26 @@
+name = "datastar-leanin"
+version = "1.0.0"
+description = "Datastar SSE streams on the LeanIn concurrency runtime."
+homepage = "https://github.com/starfederation/datastar-lean"
+keywords = ["datastar", "sse", "leanin"]
+license = "MIT"
+builtinLint = true
+defaultTargets = ["DatastarLeanIn"]
+
+[[require]]
+name = "datastar"
+path = ".."
+
+[[require]]
+name = "leanin"
+git = "https://github.com/scidonia/leanin"
+rev = "3015043d80b70e9a5b04e4058d286b74abc239ad"
+
+[[lean_lib]]
+name = "DatastarLeanIn"
+
+# The example, checked by smoke.py. LeanIn links its socket shim, which needs libuv.
+[[lean_exe]]
+name = "fan-out"
+root = "Examples.FanOut"
+moreLinkArgs = ["-luv"]

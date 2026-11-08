@@ -30,7 +30,10 @@ open Lean (FromJson)
 
 namespace Datastar
 
-private def decodeJson [FromJson α] (raw : String) : Except String α := do
+/--
+Decode signals from the JSON text the browser sent, as returned by `signalsText`.
+-/
+def decodeSignals [FromJson α] (raw : String) : Except String α := do
   let j ← Lean.Json.parse raw
   Lean.fromJson? j
 
@@ -38,18 +41,18 @@ private def decodeJson [FromJson α] (raw : String) : Except String α := do
 Decode signals from the `datastar` query parameter.
 -/
 def signalsFromQuery [FromJson α] (req : Request β) : Except String α :=
-  signalsTextFromQuery req >>= decodeJson
+  signalsTextFromQuery req >>= decodeSignals
 
 /--
 Decode signals from the request body.
 -/
 def signalsFromBody [FromJson α] (req : Request Body.Stream) : ContextAsync (Except String α) :=
-  return (← signalsTextFromBody req) >>= decodeJson
+  return (← signalsTextFromBody req) >>= decodeSignals
 
 /--
 Decode the signals sent by the browser: from the query for GET and DELETE, from the body otherwise.
 -/
 def readSignals [FromJson α] (req : Request Body.Stream) : ContextAsync (Except String α) :=
-  return (← signalsText req) >>= decodeJson
+  return (← signalsText req) >>= decodeSignals
 
 end Datastar

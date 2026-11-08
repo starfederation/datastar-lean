@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Datastar SDK Demo</title>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.4/bundles/datastar.js"></script>
+</head>
+
+<body class="bg-white dark:bg-gray-900 text-lg max-w-xl mx-auto my-16">
+    <div data-signals="{jobs: 8, deadline: 1000, _running: false}"
+        class="bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-lg px-6 py-8 ring shadow-xl ring-gray-900/5 space-y-2">
+        <div class="flex justify-between items-center">
+            <h1 class="text-gray-900 dark:text-white text-3xl font-semibold">
+                Datastar SDK Demo
+            </h1>
+            <img src="https://data-star.dev/static/images/rocket-64x64.png" alt="Rocket" width="64" height="64" />
+        </div>
+        <p class="mt-2">
+            Each job runs at the same time on LeanIn and races its deadline. Results are streamed as they arrive.
+        </p>
+        <div class="space-x-2">
+            <label for="jobs">Jobs</label>
+            <input data-bind:jobs id="jobs" type="number" min="1" max="50000"
+                class="w-32 rounded-md border border-gray-300 px-3 py-2 shadow-sm" />
+            <label for="deadline">Deadline in milliseconds</label>
+            <input data-bind:deadline id="deadline" type="number" step="100" min="0"
+                class="w-32 rounded-md border border-gray-300 px-3 py-2 shadow-sm" />
+        </div>
+        <button data-on:click="@post('/run')" data-indicator:_running data-attr:disabled="$_running"
+            class="rounded-md bg-sky-500 px-5 py-2.5 leading-5 font-semibold text-white hover:bg-sky-700 hover:text-gray-100 cursor-pointer disabled:opacity-50">
+            Start
+        </button>
+        <ol id="results" class="list-decimal list-inside"></ol>
+        <p id="summary"></p>
+    </div>
+</body>
+
+</html>

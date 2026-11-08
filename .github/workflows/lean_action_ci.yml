@@ -16,6 +16,34 @@ jobs:
       - name: Lint the library
         run: lake lint --builtin-only --linters=.missingDocs Datastar
 
+  # LeanIn needs a newer Lean than this package, and libuv. It does not block a PR: a LeanIn
+  # change should not stop work on the SDK.
+  leanin:
+    runs-on: ubuntu-latest
+    needs: build
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install libuv
+        run: sudo apt-get update && sudo apt-get install -y libuv1-dev
+
+      - name: Build datastar-leanin and its example
+        uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: datastar-leanin
+          build-args: "DatastarLeanIn fan-out"
+
+      - name: Lint datastar-leanin
+        working-directory: datastar-leanin
+        run: lake lint --builtin-only --linters=.missingDocs DatastarLeanIn
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Smoke test datastar-leanin
+        run: datastar-leanin/smoke.py
+
   # The Brotli codec is a separate package with C sources, built by Lake with the system compiler.
   brotli:
     runs-on: ubuntu-latest

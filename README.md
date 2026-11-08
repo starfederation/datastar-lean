@@ -35,9 +35,13 @@ executeScript  : String → ExecuteScript
 -- Send an event
 ServerSentEventGenerator.send : [ToEvent α] → ServerSentEventGenerator → α → Async Unit
 
+-- Stream over another server library: headers, and a body to run with its write
+sseStream : (Generator m → m Unit) → IO (SseStream m)
+
 -- Read signals from a request, as JSON text, or decoded with Lean.Data.Json
-signalsText : Request Body.Stream → ContextAsync (Except String String)
-readSignals : [FromJson α] → Request Body.Stream → ContextAsync (Except String α)
+signalsText   : Request Body.Stream → ContextAsync (Except String String)
+readSignals   : [FromJson α] → Request Body.Stream → ContextAsync (Except String α)
+decodeSignals : [FromJson α] → String → Except String α
 ```
 
 The library is built on Lean's module system, so a `module` can import it. `readSignals` lives in
@@ -98,6 +102,11 @@ Codecs for zstd and zlib are in the pipeline.
 
 A codec is a `Compressor`, see [Datastar/Compression.lean](Datastar/Compression.lean).
 
+## LeanIn
+
+[datastar-leanin](datastar-leanin/) streams on the [LeanIn](https://github.com/scidonia/leanin)
+runtime, with the same `send` and `decodeSignals`.
+
 ## Examples
 
 ```
@@ -119,7 +128,7 @@ Then open <http://127.0.0.1:3000>. Each example takes the port as an optional ar
 lake test
 ```
 
-checks the `#guard`s in `Test/Unit.lean` and runs `Test/StdHttp.lean`.
+checks the `#guard`s in `Test/Unit.lean` and runs `Test/StdHttp.lean` and `Test/Generator.lean`.
 
 ## SDK tests
 

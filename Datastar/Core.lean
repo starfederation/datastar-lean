@@ -6,6 +6,7 @@ public import Datastar.PatchSignals
 public import Datastar.ExecuteScript
 public import Datastar.SSE
 public import Datastar.Compression
+public import Datastar.Generator
 public import Datastar.StdHttp
 
 /-!
