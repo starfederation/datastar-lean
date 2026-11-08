@@ -47,60 +47,40 @@ private def withLock (lock : Std.Semaphore) (action : Async Unit) : Async Unit :
 
 private def acceptEncoding : Header.Name := .mk "accept-encoding"
 
-private def clientEncodings (req : Request β) : List String :=
-  match req.line.headers.get? acceptEncoding with
-  | some header => parseEncodings header.value
-  | none => []
-
 private def sseResponseCore
-    (chosen : Option Compressor)
-    (negotiated : Bool)
+    (compressors : List Compressor)
+    (acceptEncoding : Option String)
+    (strategy : CompressionStrategy)
     (callback : ServerSentEventGenerator → ContextAsync Unit) :
     ContextAsync (Response Body.Any) := do
+
   let ctx ← ContextAsync.getContext
-  let lock ← Semaphore.new 1
+
+  let callback'   := fun sse => ContextAsync.runIn ctx (callback sse)
+  let serialise   := withLock (← Semaphore.new 1)
+
+  let eventStream : SseStream Async ← sseStream callback' serialise compressors acceptEncoding strategy
+
   let mut builder := Response.ok
-  for (name, value) in sseHeaders (chosen.map (·.encoding)) negotiated do
+
+  for (name, value) in eventStream.headers do
     let some name' := Header.Name.ofString? name
       | throw (IO.userError s!"invalid header name: {name.quote}")
     let some value' := Header.Value.ofString? value
       | throw (IO.userError s!"invalid {name}: {value.quote}")
     builder := builder.header name' value'
 
-  let encoder ← chosen.mapM (·.start)
-
-  builder.stream fun stream => do
-    let sse ← Generator.new (fun data => stream.send { data }) (withLock lock) encoder
-    try
-      ContextAsync.runIn ctx (callback sse)
-    catch e =>
-      -- The callback threw, or the client disconnected. We should try to finish the
-      -- sse stream, as this will clean up resources like the encoder.
-      -- This call to `sse.finish` might also fail, but we drop the error here as we
-      -- are about to throw `e`.
-      try sse.finish catch _ => pure ()
-      throw e
-
-    -- The callback completed, so finish the SSE stream, which calls `encoder.finish` for
-    -- a compressed stream.
-    --
-    -- We deliberately do not wrap this `sse.finish` in a try/catch. If we did so, an
-    -- error from `encoder.finish` would be squashed, and this (body) producer would
-    -- return normally. The client would receive a complete response whose compressed
-    -- stream is missing its final bytes. Instead, the error is propagated so it
-    -- reaches `Handler.onFailure` and the connection is closed as incomplete.
-    sse.finish
+  builder.stream fun out => eventStream.writeBody fun data => out.send { data }
 
 /--
 A response that streams SSE events. The connection stays open until `callback` returns.
 -/
 def sseResponse (callback : ServerSentEventGenerator → ContextAsync Unit) : ContextAsync (Response Body.Any) :=
-  sseResponseCore none false callback
+  sseResponseCore [] none .serverPriority callback
 
 /--
 `sseResponse`, compressed with the first of `compressors` that the client accepts; uncompressed
-if there is none. The response carries `Vary: Accept-Encoding` whenever the choice depended on
-the request, so with every strategy but `.forced`.
+if there is none. See `sseStream`.
 -/
 def sseResponseWith
     (compressors : List Compressor)
@@ -108,8 +88,7 @@ def sseResponseWith
     (callback : ServerSentEventGenerator → ContextAsync Unit)
     (strategy : CompressionStrategy := .serverPriority) :
     ContextAsync (Response Body.Any) :=
-  sseResponseCore (negotiate compressors (clientEncodings req) strategy)
-    (negotiated := !compressors.isEmpty && strategy != .forced) callback
+  sseResponseCore compressors ((req.line.headers.get? acceptEncoding).map (·.value)) strategy callback
 
 /--
 The signals in the `datastar` query parameter, as the JSON text the browser sent.
@@ -133,12 +112,20 @@ def signalsTextFromBody (req : Request Body.Stream) : ContextAsync (Except Strin
 
 /--
 The signals the browser sent, as JSON text: from the query for GET and DELETE, from the body
-otherwise.
+otherwise, read with `readBody`. For a server library whose requests have another body type.
 -/
-def signalsText (req : Request Body.Stream) : ContextAsync (Except String String) :=
+def signalsTextWith [Monad m] (req : Request β) (readBody : β → m (Except String String)) :
+    m (Except String String) :=
   if req.line.method == .get || req.line.method == .delete then
     pure (signalsTextFromQuery req)
   else
-    signalsTextFromBody req
+    readBody req.body
+
+/--
+The signals the browser sent, as JSON text: from the query for GET and DELETE, from the body
+otherwise.
+-/
+def signalsText (req : Request Body.Stream) : ContextAsync (Except String String) :=
+  signalsTextWith req fun _ => signalsTextFromBody req
 
 end Datastar

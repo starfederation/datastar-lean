@@ -35,13 +35,13 @@ executeScript  : String → ExecuteScript
 -- Send an event
 ServerSentEventGenerator.send : [ToEvent α] → ServerSentEventGenerator → α → Async Unit
 
--- Stream over another server library
-Generator.new : (ByteArray → m Unit) → (m Unit → m Unit) → IO (Generator m)
-sseHeaders    : List (String × String)
+-- Stream over another server library: headers, and a body to run with its write
+sseStream : (Generator m → m Unit) → IO (SseStream m)
 
 -- Read signals from a request, as JSON text, or decoded with Lean.Data.Json
-signalsText : Request Body.Stream → ContextAsync (Except String String)
-readSignals : [FromJson α] → Request Body.Stream → ContextAsync (Except String α)
+signalsText   : Request Body.Stream → ContextAsync (Except String String)
+readSignals   : [FromJson α] → Request Body.Stream → ContextAsync (Except String α)
+decodeSignals : [FromJson α] → String → Except String α
 ```
 
 The library is built on Lean's module system, so a `module` can import it. `readSignals` lives in
@@ -102,6 +102,11 @@ Codecs for zstd and zlib are in the pipeline.
 
 A codec is a `Compressor`, see [Datastar/Compression.lean](Datastar/Compression.lean).
 
+## LeanIn
+
+[datastar-leanin](datastar-leanin/) streams on the [LeanIn](https://github.com/scidonia/leanin)
+runtime, with the same `send` and `decodeSignals`.
+
 ## Examples
 
 ```
@@ -116,20 +121,6 @@ Then open <http://127.0.0.1:3000>. Each example takes the port as an optional ar
 | `hello-world` | Reads a signal, streams `patchElements` one character at a time. |
 | `hello-world-channel` | State shared between connections; Start restarts the animation on every open page. |
 | `activity-feed` | `patchSignals` with `patchElements`; `@post` requests with signals in the body. |
-
-`examples-leanin` is a separate package, because LeanIn needs Lean 4.35 and libuv:
-
-```
-cd examples-leanin
-lake build
-.lake/build/bin/fan-out
-```
-
-With Homebrew, set `C_INCLUDE_PATH=$(brew --prefix)/include` and `LIBRARY_PATH=$(brew --prefix)/lib`.
-
-| Executable | What it shows |
-| --- | --- |
-| `fan-out` | Jobs that run concurrently on [LeanIn](https://github.com/scidonia/leanin), each racing a deadline; results stream as they finish. |
 
 ## Tests
 

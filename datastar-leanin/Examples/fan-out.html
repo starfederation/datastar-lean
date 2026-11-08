@@ -27,7 +27,7 @@
             <input data-bind:deadline id="deadline" type="number" step="100" min="0"
                 class="w-32 rounded-md border border-gray-300 px-3 py-2 shadow-sm" />
         </div>
-        <button data-on:click="@get('/run')" data-indicator:_running data-attr:disabled="$_running"
+        <button data-on:click="@post('/run')" data-indicator:_running data-attr:disabled="$_running"
             class="rounded-md bg-sky-500 px-5 py-2.5 leading-5 font-semibold text-white hover:bg-sky-700 hover:text-gray-100 cursor-pointer disabled:opacity-50">
             Start
         </button>

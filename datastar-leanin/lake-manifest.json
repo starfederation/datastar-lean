@@ -19,6 +19,6 @@
    "dir": "..",
    "copy": false,
    "configFile": "lakefile.toml"}],
- "name": "«datastar-examples-leanin»",
+ "name": "«datastar-leanin»",
  "lakeDir": ".lake",
  "fixedToolchain": false}

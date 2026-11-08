@@ -1,4 +1,5 @@
 import Datastar
+import DatastarLeanIn
 
 import LeanIn
 import LeanIn.Http.StdHandler
@@ -7,7 +8,7 @@ import LeanIn.Runtime.Net
 open LeanIn LeanIn.Http LeanIn.Runtime
 open LeanIn.Task.Sync
 
-open Datastar
+open Datastar Datastar.LeanIn
 
 structure Signals where
   jobs : Nat
@@ -37,23 +38,6 @@ def job (ctx : Task.Ctx) (reports : Channel Report) (push : Push) (clock : Clock
   let finished := (← awaitAsync ctx (Runtime.withTimeout clock (.ofNat deadline) work)).isSome
   let sent ← (Channel.trySend reports { index, latency, finished } push : IO Bool)
   unless sent do throw (.userError "the report channel is full")
-
-/--
-The `Std.Http` response of an SSE stream on LeanIn. Only `callback` writes to the stream, so the
-generator has nothing to serialise.
--/
-def sseResponse (callback : Generator VM → VM Unit) : VM (Std.Http.Response ResponseBody) := do
-  let headers := (sseHeaders).foldl (init := Std.Http.Headers.empty) fun acc (name, value) =>
-    match Std.Http.Header.Name.ofString? name, Std.Http.Header.Value.ofString? value with
-    | some name, some value => acc.insert name value
-    | _, _ => acc
-  return {
-    line := { status := .ok, headers }
-    body := .stream none fun write => do
-      let sse ← (monadLift (Generator.new write id : IO (Generator VM)) : VM (Generator VM))
-      callback sse
-      sse.finish
-  }
 
 def row (id : Nat) (state : String) : String :=
   s!"<li id='job-{id}'>job {id}: {state}</li>"
@@ -91,9 +75,9 @@ def run (push : Push) (clock : Clock) (ctx : Task.Ctx) (signals : Signals) (sse 
 
   let mut finished := 0
   let mut writing := 0
-  for _ in [0:signals.jobs] do
+  for received in [0:signals.jobs] do
     let report ← nextReport ctx reports
-    if finished == 0 then log "first report"
+    if received == 0 then log "first report"
     if report.finished then finished := finished + 1
     let before ← nowMs
     sse.send <| patchElements (row report.index (outcome report signals.deadline))
@@ -121,11 +105,11 @@ def rejected (message : String) : VM (Std.Http.Response ResponseBody) :=
     sse.send <| patchElements s!"<p id='summary' class='text-red-500'>{message}</p>"
 
 def app (push : Push) (clock : Clock) (ctx : Task.Ctx) (req : Std.Http.Request Server.BodyReader) :
-    VM (Std.Http.Response ResponseBody) :=
+    VM (Std.Http.Response ResponseBody) := do
   match req.line.method, toString req.line.uri.path with
   | .get, "/" => pure <| text .ok "text/html; charset=utf-8" indexHtml
-  | .get, "/run" =>
-    match signalsFromQuery (α := Signals) req with
+  | .post, "/run" =>
+    match (← signalsText req) >>= decodeSignals (α := Signals) with
     | .error _ => rejected "Jobs and deadline must be whole numbers."
     | .ok signals =>
       if signals.jobs == 0 || signals.jobs > maxJobs then
@@ -136,24 +120,27 @@ def app (push : Push) (clock : Clock) (ctx : Task.Ctx) (req : Std.Http.Request S
 
 def main (args : List String) : IO UInt32 := do
   let port := (args.head? >>= String.toNat?).getD 3000
+  let workers := (args.findSome? fun a => (a.dropPrefix? "workers=").bind (·.toNat?)).getD 1
   let hooks ← Hooks.new
+  -- Binding starts LeanIn's pump thread, which owns the libuv loop. The `workers` carriers run the
+  -- steps; a completion on the loop thread only enqueues its continuation for a carrier to take.
   let listener ← Listener.bind (loopback port.toUInt16)
-  -- Exactly one carrier: `Runtime.run` serves the one queue on this thread and drives the libuv loop
-  -- itself, so every step, timer and socket callback runs here.
-  let executor ← Sched.Executor.new Task.Item 256 1
+  let executor ← Sched.Executor.new Task.Item 256 workers
   let clock := Clock.live hooks
   let config : Server.Config := { clock, continuePolicy := .application }
   let handler (ctx : Task.Ctx) : StdHandler := { onRequest := app (sharedPush executor) clock ctx }
 
-  IO.println s!"Listening on http://127.0.0.1:{port}"
+  IO.println s!"Listening on http://127.0.0.1:{port} with {workers} workers"
   (← IO.getStdout).flush
 
   let serve : Task.EAsync IO.Error Unit :=
-    serveForever hooks listener fun conn => do
+    serveForeverShared hooks executor listener fun conn => do
       let (ctx : Task.Ctx) ← Task.EAsync.ofAsync ⟨fun (k : Task.Ctx → Task.Ctx → IO Unit) (current : Task.Ctx) => k current current⟩
       Server.serveConnStd config conn (handler ctx)
 
-  match ← (Runtime.run executor serve : IO (Except IO.Error Unit)) with
+  let (_, outcome) ← Runtime.runCarriersWait executor workers serve
+  Runtime.Io.stop
+  match outcome with
   | .ok _ => return 0
   | .error err =>
     IO.eprintln s!"The accept loop ended: {err}"
